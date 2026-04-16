@@ -28,30 +28,35 @@ device = torch.device("cpu")
 # -----------------------------
 @st.cache_resource
 def load_model():
-
     model = CNNModel()
-    model.to(device)
-
-    # FIXED: Updated the filename to exactly match your uploaded weights file
+    
+    # 1. Load the checkpoint
     checkpoint = torch.load(
-        "model_checkpoint_deepcnn.pth",
-        map_location=device,
-        weights_only=False # Added to avoid PyTorch 2.x security restrictions on checkpoints
+        "model_checkpoint_deepcnn.pth", 
+        map_location=device, 
+        weights_only=False
     )
 
-    # Extract weights safely
-    state_dict = checkpoint.get(
-        "model_state_dict",
-        checkpoint
-    )
+    # 2. Extract the actual state dict
+    # If the file was saved as a dictionary of states, get 'model_state_dict'
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
+    else:
+        state_dict = checkpoint
 
-    model.load_state_dict(
-        state_dict,
-        strict=False
-    )
+    # 3. Handle DataParallel prefix (Common issue)
+    # If model was trained on GPU/DataParallel, keys start with 'module.'
+    # This strips 'module.' so it matches your local CNNModel
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        name = k[7:] if k.startswith('module.') else k
+        new_state_dict[name] = v
 
+    # 4. Load weights into model
+    model.load_state_dict(new_state_dict)
+    
+    model.to(device)
     model.eval()
-
     return model
 
 model = load_model()
@@ -78,14 +83,17 @@ def predict_image(image):
 
     with torch.no_grad():
         output = model(image)
-        probability = output.item()
+        # Since output is a tensor like [[0.85]], use .item()
+        probability = output.item() 
 
     if probability >= 0.5:
         label = "Deepfake"
+        conf = probability * 100
     else:
         label = "Real"
+        conf = (1 - probability) * 100 # Confidence for 'Real'
 
-    return label, probability
+    return label, conf
 
 # -----------------------------
 # File Upload UI
