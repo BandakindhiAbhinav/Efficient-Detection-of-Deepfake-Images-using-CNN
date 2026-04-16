@@ -1,55 +1,112 @@
 import streamlit as st
 import torch
-from torchvision import transforms
+import torch.nn as nn
 from PIL import Image
+import torchvision.transforms as transforms
 
 from model import CNNModel
 
-st.title("Deepfake Detection using CNN")
+# -----------------------------
+# Streamlit Page Config
+# -----------------------------
+st.set_page_config(
+    page_title="Deepfake Image Detection",
+    page_icon="🧠",
+    layout="centered"
+)
 
+st.title("Efficient Detection of Deepfake Images using CNN")
+st.write("Upload an image to check whether it is Real or Deepfake.")
+
+# -----------------------------
+# Device Setup (Streamlit uses CPU)
+# -----------------------------
 device = torch.device("cpu")
 
-model = CNNModel()
+# -----------------------------
+# Load Model Safely
+# -----------------------------
+@st.cache_resource
+def load_model():
+    model = CNNModel()
+    model.to(device)
 
-model.load_state_dict(
-    torch.load(
+    checkpoint = torch.load(
         "deep_cnn_model_weights.pth",
         map_location=device
     )
-)
 
-model.eval()
+    # Handle both checkpoint formats
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
 
+    model.eval()
+
+    return model
+
+
+model = load_model()
+
+# -----------------------------
+# Image Transform
+# -----------------------------
 transform = transforms.Compose([
-    transforms.Resize((64, 64)),
-    transforms.ToTensor()
+    transforms.Resize((128, 128)),
+    transforms.ToTensor(),
+    transforms.Normalize(
+        mean=[0.5, 0.5, 0.5],
+        std=[0.5, 0.5, 0.5]
+    )
 ])
 
+
+# -----------------------------
+# Prediction Function
+# -----------------------------
+def predict_image(image):
+    image = transform(image)
+    image = image.unsqueeze(0)
+    image = image.to(device)
+
+    with torch.no_grad():
+        output = model(image)
+        probability = output.item()
+
+    if probability >= 0.5:
+        label = "Deepfake"
+    else:
+        label = "Real"
+
+    return label, probability
+
+
+# -----------------------------
+# File Upload UI
+# -----------------------------
 uploaded_file = st.file_uploader(
     "Upload an Image",
-    type=["jpg", "png", "jpeg"]
+    type=["jpg", "jpeg", "png"]
 )
 
 if uploaded_file is not None:
+    image = Image.open(uploaded_file).convert("RGB")
 
-    image = Image.open(uploaded_file)
+    st.image(
+        image,
+        caption="Uploaded Image",
+        use_container_width=True
+    )
 
-    st.image(image)
+    if st.button("Predict"):
+        label, probability = predict_image(image)
 
-    img = transform(image)
+        st.subheader("Prediction Result")
 
-    img = img.unsqueeze(0)
+        if label == "Deepfake":
+            st.error(f"Prediction: {label}")
+        else:
+            st.success(f"Prediction: {label}")
 
-    with torch.no_grad():
-
-        output = model(img)
-
-        prediction = output.item()
-
-    if prediction >= 0.5:
-
-        st.success("Real Image")
-
-    else:
-
-        st.error("Fake Image")
+        st.write(f"Confidence: {probability:.4f}")
