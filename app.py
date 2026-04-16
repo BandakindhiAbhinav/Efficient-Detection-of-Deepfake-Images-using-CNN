@@ -38,9 +38,9 @@ def load_model():
 
     # Handle both checkpoint formats
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        model.load_state_dict(checkpoint["model_state_dict"])
+        model.load_state_dict(checkpoint["model_state_dict"],strict=False)
     else:
-        model.load_state_dict(checkpoint)
+        model.load_state_dict(checkpoint,strict=False)
 
     model.eval()
 
@@ -53,7 +53,7 @@ model = load_model()
 # Image Transform
 # -----------------------------
 transform = transforms.Compose([
-    transforms.Resize((128, 128)),
+    transforms.Resize((64, 64)),
     transforms.ToTensor(),
     transforms.Normalize(
         mean=[0.5, 0.5, 0.5],
