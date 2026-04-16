@@ -30,19 +30,17 @@ device = torch.device("cpu")
 def load_model():
     model = CNNModel()
     
-    # 1. Load the checkpoint
-    checkpoint = torch.load(
-        "model_checkpoint_deepcnn.pth", 
-        map_location=device, 
-        weights_only=False
-    )
-
-    # 2. Extract the actual state dict
-    # If the file was saved as a dictionary of states, get 'model_state_dict'
-    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        state_dict = checkpoint["model_state_dict"]
-    else:
-        state_dict = checkpoint
+    # Load the weights-only file you downloaded at the end of your script
+    # Use "deep_cnn_model_weights.pth" instead of the checkpoint file
+    state_dict = torch.load("deep_cnn_model_weights.pth", map_location=device)
+    
+    # Strip "module." prefix if it exists (common if trained on Kaggle/Colab GPUs)
+    new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+    
+    model.load_state_dict(new_state_dict)
+    model.to(device)
+    model.eval()
+    return model
 
     # 3. Handle DataParallel prefix (Common issue)
     # If model was trained on GPU/DataParallel, keys start with 'module.'
