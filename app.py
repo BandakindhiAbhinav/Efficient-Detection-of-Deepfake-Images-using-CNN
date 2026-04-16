@@ -32,9 +32,11 @@ def load_model():
     model = CNNModel()
     model.to(device)
 
+    # FIXED: Updated the filename to exactly match your uploaded weights file
     checkpoint = torch.load(
-        "deep_cnn_model_weights.pth",
-        map_location=device
+        "model_checkpoint_deepcnn.pth",
+        map_location=device,
+        weights_only=False # Added to avoid PyTorch 2.x security restrictions on checkpoints
     )
 
     # Extract weights safely
@@ -66,7 +68,6 @@ transform = transforms.Compose([
     )
 ])
 
-
 # -----------------------------
 # Prediction Function
 # -----------------------------
@@ -85,7 +86,6 @@ def predict_image(image):
         label = "Real"
 
     return label, probability
-
 
 # -----------------------------
 # File Upload UI
