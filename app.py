@@ -37,9 +37,14 @@ def load_model():
         map_location=device
     )
 
-    # FINAL FIX
+    # Extract weights safely
+    state_dict = checkpoint.get(
+        "model_state_dict",
+        checkpoint
+    )
+
     model.load_state_dict(
-        checkpoint["model_state_dict"],
+        state_dict,
         strict=False
     )
 
