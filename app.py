@@ -28,6 +28,7 @@ device = torch.device("cpu")
 # -----------------------------
 @st.cache_resource
 def load_model():
+
     model = CNNModel()
     model.to(device)
 
@@ -36,16 +37,15 @@ def load_model():
         map_location=device
     )
 
-    # Handle both checkpoint formats
-    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        model.load_state_dict(checkpoint["model_state_dict"],strict=False)
-    else:
-        model.load_state_dict(checkpoint,strict=False)
+    # FINAL FIX
+    model.load_state_dict(
+        checkpoint["model_state_dict"],
+        strict=False
+    )
 
     model.eval()
 
     return model
-
 
 model = load_model()
 
