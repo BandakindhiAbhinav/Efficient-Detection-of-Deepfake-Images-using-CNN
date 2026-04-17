@@ -1,131 +1,72 @@
 import streamlit as st
 import torch
-import torch.nn as nn
 from PIL import Image
 import torchvision.transforms as transforms
-
 from model import CNNModel
 
-# -----------------------------
-# Streamlit Page Config
-# -----------------------------
-st.set_page_config(
-    page_title="Deepfake Image Detection",
-    page_icon="🧠",
-    layout="centered"
-)
+# Page Config
+st.set_page_config(page_title="Deepfake Detection", page_icon="🧠", layout="centered")
 
-st.title("Efficient Detection of Deepfake Images using CNN")
-st.write("Upload an image to check whether it is Real or Deepfake.")
+st.title("Deepfake Image Detection")
+st.write("Upload an image to verify its authenticity.")
 
-# -----------------------------
-# Device Setup (Streamlit uses CPU)
-# -----------------------------
 device = torch.device("cpu")
 
-# -----------------------------
-# Load Model Safely
-# -----------------------------
 @st.cache_resource
 def load_model():
     model = CNNModel()
     
-    # 1. Load the checkpoint file you downloaded from Colab
-    checkpoint = torch.load("model_checkpoint_deepcnn.pth", map_location=device)
-
-    # 2. Extract ONLY the weights from the 'model_state_dict' key
-    # This is the "Unexpected key" that actually contains what we need!
-    state_dict = checkpoint['model_state_dict']
-
-    # 3. Clean 'module.' prefix (if you used a GPU in Colab)
-    new_state_dict = {}
-    for k, v in state_dict.items():
-        name = k[7:] if k.startswith('module.') else k
-        new_state_dict[name] = v
-
-    # 4. Load the cleaned weights
-    model.load_state_dict(new_state_dict)
+    # Use the filename you downloaded
+    checkpoint_path = "deep_cnn_model_weights.pth" 
     
-    model.to(device)
-    model.eval()
-    return model
+    # 1. Load the checkpoint dictionary
+    checkpoint = torch.load(checkpoint_path, map_location=device)
 
-    # 3. Handle DataParallel prefix (Common issue)
-    # If model was trained on GPU/DataParallel, keys start with 'module.'
-    # This strips 'module.' so it matches your local CNNModel
-    new_state_dict = {}
-    for k, v in state_dict.items():
-        name = k[7:] if k.startswith('module.') else k
-        new_state_dict[name] = v
+    # 2. Extract the weights (model_state_dict) from the checkpoint
+    # If the file is just weights, it uses the checkpoint itself
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        state_dict = checkpoint['model_state_dict']
+    else:
+        state_dict = checkpoint
 
-    # 4. Load weights into model
+    # 3. Strip 'module.' prefix (crucial for Colab/Kaggle models)
+    new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+
+    # 4. Load into model
     model.load_state_dict(new_state_dict)
-    
-    model.to(device)
     model.eval()
     return model
 
 model = load_model()
 
-# -----------------------------
-# Image Transform
-# -----------------------------
+# Image Preprocessing
 transform = transforms.Compose([
     transforms.Resize((64, 64)),
     transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.5, 0.5, 0.5],
-        std=[0.5, 0.5, 0.5]
-    )
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 ])
 
-# -----------------------------
-# Prediction Function
-# -----------------------------
 def predict_image(image):
-    image = transform(image)
-    image = image.unsqueeze(0)
-    image = image.to(device)
-
+    img_tensor = transform(image).unsqueeze(0).to(device)
     with torch.no_grad():
-        output = model(image)
-        # Since output is a tensor like [[0.85]], use .item()
-        probability = output.item() 
+        probability = model(img_tensor).item()
 
+    # Labels based on alphabetical order: 0: Fake, 1: Real
     if probability >= 0.5:
-        label = "Deepfake"
-        conf = probability * 100
+        return "Real", probability * 100
     else:
-        label = "Real"
-        conf = (1 - probability) * 100 # Confidence for 'Real'
+        return "Deepfake", (1 - probability) * 100
 
-    return label, conf
+# UI
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
 
-# -----------------------------
-# File Upload UI
-# -----------------------------
-uploaded_file = st.file_uploader(
-    "Upload an Image",
-    type=["jpg", "jpeg", "png"]
-)
-
-if uploaded_file is not None:
+if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    st.image(
-        image,
-        caption="Uploaded Image",
-        use_container_width=True
-    )
-
-    if st.button("Predict"):
-        label, probability = predict_image(image)
-
-        st.subheader("Prediction Result")
-
+    if st.button("Analyze Image"):
+        label, confidence = predict_image(image)
         if label == "Deepfake":
-            st.error(f"Prediction: {label}")
+            st.error(f"Result: {label} ({confidence:.2f}% confidence)")
         else:
-            st.success(f"Prediction: {label}")
-
-        st.write(f"Confidence: {probability:.4f}")
+            st.success(f"Result: {label} ({confidence:.2f}% confidence)")
