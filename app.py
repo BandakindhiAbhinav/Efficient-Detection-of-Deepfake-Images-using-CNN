@@ -30,14 +30,22 @@ device = torch.device("cpu")
 def load_model():
     model = CNNModel()
     
-    # Load the weights-only file you downloaded at the end of your script
-    # Use "deep_cnn_model_weights.pth" instead of the checkpoint file
-    state_dict = torch.load("deep_cnn_model_weights.pth", map_location=device)
-    
-    # Strip "module." prefix if it exists (common if trained on Kaggle/Colab GPUs)
-    new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
-    
+    # 1. Load the checkpoint file you downloaded from Colab
+    checkpoint = torch.load("model_checkpoint_deepcnn.pth", map_location=device)
+
+    # 2. Extract ONLY the weights from the 'model_state_dict' key
+    # This is the "Unexpected key" that actually contains what we need!
+    state_dict = checkpoint['model_state_dict']
+
+    # 3. Clean 'module.' prefix (if you used a GPU in Colab)
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        name = k[7:] if k.startswith('module.') else k
+        new_state_dict[name] = v
+
+    # 4. Load the cleaned weights
     model.load_state_dict(new_state_dict)
+    
     model.to(device)
     model.eval()
     return model
